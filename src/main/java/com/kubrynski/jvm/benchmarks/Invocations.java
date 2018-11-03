@@ -1,5 +1,10 @@
 package com.kubrynski.jvm.benchmarks;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.concurrent.TimeUnit;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -28,13 +33,48 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Fork(3)
 public class Invocations {
 
+	private static final String CALL_ME = "callMe";
+	private Caller caller = new Caller();
+
+	private MethodHandle dynamicMethod;
+	private Method reflectMethod;
+
 	@Setup
-	public void setup() {
+	public void setup() throws NoSuchMethodException, IllegalAccessException {
+		reflectMethod = Caller.class.getMethod(CALL_ME);
+		dynamicMethod = MethodHandles.lookup().findVirtual(Caller.class, CALL_ME, MethodType.methodType(double.class));
 	}
 
 	@Benchmark
 	public double baseline() {
-		return 0;
+		return caller.callMe();
+	}
+
+	@Benchmark
+	public Object reflection() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+		Method directCall = Caller.class.getMethod(CALL_ME);
+		return directCall.invoke(caller);
+	}
+
+	@Benchmark
+	public Object handle() throws Throwable {
+		MethodHandle directCall = MethodHandles.lookup().findVirtual(Caller.class, CALL_ME, MethodType.methodType(double.class));
+		return directCall.invoke(caller);
+	}
+
+	@Benchmark
+	public Object reflectionWithoutLookup() throws InvocationTargetException, IllegalAccessException {
+		return reflectMethod.invoke(caller);
+	}
+
+	@Benchmark
+	public Object handleWithoutLookup() throws Throwable {
+		return dynamicMethod.invoke(caller);
+	}
+
+	@Benchmark
+	public double handleExactWithoutLookup() throws Throwable {
+		return (double) dynamicMethod.invokeExact(caller);
 	}
 
 	public static void main(String[] args) throws RunnerException {
